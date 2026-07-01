@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import {
   Car,
@@ -12,8 +13,32 @@ import {
   Search,
   LogIn,
 } from "lucide-react";
-import { SignInButton, UserButton, useUser } from "@clerk/nextjs";
 import { Button } from "@/components/ui/button";
+
+// Lazy-load Clerk components so the Navbar doesn't crash during SSG
+// when ClerkProvider is absent (e.g. builds without a Clerk key set).
+const ClerkUserButton = dynamic(
+  () => import("@clerk/nextjs").then((m) => ({ default: m.UserButton })),
+  { ssr: false }
+);
+
+const ClerkSignInButton = dynamic(
+  () => import("@clerk/nextjs").then((m) => ({ default: m.SignInButton })),
+  { ssr: false }
+);
+
+// Safe hook — returns Clerk user state when ClerkProvider is present,
+// safe defaults (not signed-in, already loaded) otherwise.
+function useSafeUser() {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { useUser } = require("@clerk/nextjs");
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    return useUser();
+  } catch {
+    return { isLoaded: true, isSignedIn: false, user: null };
+  }
+}
 
 const NAV_LINKS = [
   { name: "Drivers", href: "/sport/f1", icon: Car },
@@ -26,7 +51,7 @@ const NAV_LINKS = [
 
 export default function Navbar() {
   const pathname = usePathname();
-  const { isLoaded, isSignedIn } = useUser();
+  const { isLoaded, isSignedIn } = useSafeUser();
 
   return (
     <header className="sticky top-0 z-50 w-full bg-primary border-b border-primary-dark shadow-md text-white">
@@ -88,11 +113,11 @@ export default function Navbar() {
             {isLoaded ? (
               isSignedIn ? (
                 <div className="p-1 bg-black/20 rounded-full flex items-center justify-center">
-                  <UserButton appearance={{ elements: { avatarBox: "w-8 h-8" } }} />
+                  <ClerkUserButton appearance={{ elements: { avatarBox: "w-8 h-8" } }} />
                 </div>
               ) : (
                 <div className="flex items-center rounded-full border border-white/15 bg-gradient-to-r from-black/35 via-black/20 to-black/35 p-1 shadow-inner backdrop-blur-sm">
-                  <SignInButton mode="modal">
+                  <ClerkSignInButton mode="modal">
                     <Button
                       size="default"
                       variant="ghost"
@@ -101,7 +126,7 @@ export default function Navbar() {
                       <LogIn data-icon="inline-start" />
                       Login
                     </Button>
-                  </SignInButton>
+                  </ClerkSignInButton>
                 </div>
               )
             ) : (
